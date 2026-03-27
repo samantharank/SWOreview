@@ -1121,12 +1121,13 @@ async function suggestBroker(type) {
   const office = document.getElementById('f-office')?.value;
   if (!office) return;
   const wrap = document.getElementById('broker-suggestion');
-  const nameEl = document.getElementById('suggested-broker-name');
-  const reasonEl = document.getElementById('suggested-broker-reason');
   if (!wrap) return;
 
+  // Sarnia has no call rotation
+  if (type !== 'new_business' && office === 'Sarnia') { wrap.style.display = 'none'; return; }
+
   const listKey = type === 'new_business' ? 'new_business' : 'call_rotation';
-  const officeBrokers = (BROKER_LISTS[listKey] && BROKER_LISTS[listKey][office]) || [];
+  const officeBrokers = (BROKER_LISTS[listKey] || {})[office] || [];
   const since = new Date();
   since.setDate(since.getDate() - 7);
   const sinceStr = since.toISOString().split('T')[0];
@@ -1138,36 +1139,58 @@ async function suggestBroker(type) {
   try {
     const data = await sbFetch(`/rest/v1/slc_records?select=broker_name,record_date&office=eq.${office}${typeFilter}&record_date=gte.${sinceStr}&limit=1000`);
 
-    // Count entries per broker using the official broker list
-    const counts = {};
-    officeBrokers.forEach(b => counts[b] = 0);
+    // Exclude brokers on leave (admin toggle) OR off today (from calendar)
+    const officeKey = office.toLowerCase();
+    const todayOff = OFF_TODAY[officeKey] || [];
+    const activeBrokers = officeBrokers.filter(b => {
+      if (isOnLeave(listKey, office, b)) return false;
+      const firstName = b.split(' ')[0].toLowerCase();
+      const isOffToday = todayOff.some(name => name.toLowerCase().startsWith(firstName) || firstName.startsWith(name.toLowerCase().split(' ')[0]));
+      return !isOffToday;
+    });
 
+    if (!activeBrokers.length) { wrap.style.display = 'none'; return; }
+
+    const counts = {};
+    activeBrokers.forEach(b => counts[b] = 0);
     (data || []).forEach(r => {
       const full = (r.broker_name || '').trim();
-      // Match against official list (case-insensitive first name match)
-      const match = officeBrokers.find(b => b.toLowerCase().startsWith(full.split(' ')[0].toLowerCase()) || full.toLowerCase().startsWith(b.split(' ')[0].toLowerCase()));
+      const match = activeBrokers.find(b => b.toLowerCase().startsWith(full.split(' ')[0].toLowerCase()) || full.toLowerCase().startsWith(b.split(' ')[0].toLowerCase()));
       if (match) counts[match] = (counts[match] || 0) + 1;
     });
 
-    // Find broker with fewest entries
     const sorted = Object.entries(counts).sort((a, b) => a[1] - b[1]);
     if (!sorted.length) { wrap.style.display = 'none'; return; }
 
-    const [broker, count] = sorted[0];
-    nameEl.textContent = broker;
-    reasonEl.textContent = count === 0 ? '(no entries this week)' : `(${count} entries in last 7 days)`;
+    const [broker1, count1] = sorted[0];
+    const [broker2, count2] = sorted.length > 1 ? sorted[1] : [null, null];
+    const label1 = count1 === 0 ? 'no entries this week' : `${count1} entries this week`;
+    const label2 = broker2 ? (count2 === 0 ? 'no entries this week' : `${count2} entries this week`) : null;
+
+    wrap.innerHTML = `<div style="background:#e8f4fd;border:1px solid #b3d9f7;border-radius:6px;padding:10px 14px;font-size:13px;color:var(--classic-blue);">
+      <div style="margin-bottom:${broker2 ? '8px' : '0'}">
+        <strong>💡 Suggested:</strong>
+        <span style="color:var(--electric-blue);cursor:pointer;text-decoration:underline;margin:0 6px;font-weight:600;" onclick="useSuggestedBroker('${broker1}')">${broker1}</span>
+        <span style="color:var(--charcoal);font-size:11px;">(${label1})</span>
+      </div>
+      ${broker2 ? `<div>
+        <strong style="color:var(--charcoal);">🔄 Backup:</strong>
+        <span style="color:#385263;cursor:pointer;text-decoration:underline;margin:0 6px;" onclick="useSuggestedBroker('${broker2}')">${broker2}</span>
+        <span style="color:var(--charcoal);font-size:11px;">(${label2})</span>
+      </div>` : ''}
+    </div>`;
     wrap.style.display = '';
   } catch(e) {
-    // Fallback: just show first broker alphabetically
     if (officeBrokers.length) {
-      nameEl.textContent = officeBrokers[0];
-      reasonEl.textContent = '';
+      wrap.innerHTML = `<div style="background:#e8f4fd;border:1px solid #b3d9f7;border-radius:6px;padding:10px 14px;font-size:13px;">
+        <strong>💡 Suggested:</strong>
+        <span style="color:var(--electric-blue);cursor:pointer;text-decoration:underline;margin:0 6px;" onclick="useSuggestedBroker('${officeBrokers[0]}')">${officeBrokers[0]}</span>
+      </div>`;
       wrap.style.display = '';
-    } else {
-      wrap.style.display = 'none';
-    }
+    } else { wrap.style.display = 'none'; }
   }
 }
+
 
 function useSuggestedBroker(name) {
   const brokerInput = document.getElementById('f-broker');
