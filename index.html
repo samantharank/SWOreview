@@ -1009,12 +1009,29 @@ const DEFAULT_BROKER_LISTS = {
     Chatham: ['Ashley Lucier','Courtney Pateman','Heather Fraleigh','Shelby Deneau','Suzanne Curran','Tanya Parker','Tina Beauvais']
   },
   call_rotation: {
-    Sarnia: ['Amanda Mckay','Carissa Hetu','Chantelle Oliver','Courtney Cammidge','David Rusland','Erica Vernon','Heather Fraleigh','Kayleigh Moore','Kelly Haney','Madison Zajda','Melody Scheuermann','Nicole Tremblay','Richard Cerutti','Sara Bogaart','Stacey Roundell','Stephanie Sadaka','Steve Simpson','Tara Palominos'],
+    Sarnia: [],
     London: ['Christine Currie','Connor Denning','David Friesen','Kyle Sales','Nicole Tremblay','Noah Mazzilli','Steve Simpson'],
-    Chatham: ['Ashley Lucier','Courtney Pateman','Heather Fraleigh','Shelby Deneau','Suzanne Curran','Tanya Parker','Tina Beauvais']
+    Chatham: ['Heather Fraleigh','Tanya Parker','Ashley Lucier','Tina Beauvais','Suzanne Curran','Shelby Deneau','Courtney Pateman']
   }
 };
 let BROKER_LISTS = { new_business: { Sarnia: [], London: [], Chatham: [] }, call_rotation: { Sarnia: [], London: [], Chatham: [] } };
+let ON_LEAVE = JSON.parse(localStorage.getItem('ont_on_leave') || '{}');
+
+function saveOnLeave() { localStorage.setItem('ont_on_leave', JSON.stringify(ON_LEAVE)); }
+function isOnLeave(type, office, name) { return !!(ON_LEAVE[type] && ON_LEAVE[type][office] && ON_LEAVE[type][office].includes(name)); }
+function toggleLeave(type, office, name) {
+  if (!ON_LEAVE[type]) ON_LEAVE[type] = {};
+  if (!ON_LEAVE[type][office]) ON_LEAVE[type][office] = [];
+  if (isOnLeave(type, office, name)) {
+    ON_LEAVE[type][office] = ON_LEAVE[type][office].filter(b => b !== name);
+    showToast(name + ' is back — removed from leave.', 'success');
+  } else {
+    ON_LEAVE[type][office].push(name);
+    showToast(name + ' marked as on leave.', 'success');
+  }
+  saveOnLeave();
+  renderBrokerList();
+}
 
 async function sbFetch(path, opts = {}) {
   const res = await fetch(SUPABASE_URL + path, {
