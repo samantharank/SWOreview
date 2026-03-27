@@ -634,7 +634,7 @@ async function loadLastTransfers() {
     offices.forEach(o => types.forEach(t => {
       const typeFilter = t === 'new_business'
         ? 'record_type=in.(new_business,quote_rotation)'
-        : 'record_type=eq.call_rotation';
+        : 'record_type=in.(call_rotation,vacation_tracker)';
       fetches.push(sbFetch(`/rest/v1/slc_records?office=eq.${o}&${typeFilter}&order=record_date.desc.nullslast,id.desc&limit=1`));
     }));
     const results = await Promise.all(fetches);
